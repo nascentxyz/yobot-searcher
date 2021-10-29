@@ -2,7 +2,7 @@ import { providers } from "ethers"
 import { Web3Provider } from "@ethersproject/providers"
 
 
-const getAllERC721LimitOrderEvents = async function(
+const fetchAllERC721LimitOrderEvents = async function(
   ERC721LimitOrderContract,
   filterStartBlock: number,
   provider: providers.InfuraProvider,
@@ -22,4 +22,4 @@ const getAllERC721LimitOrderEvents = async function(
 	return events
 }
 
-export default getAllERC721LimitOrderEvents;
+export default fetchAllERC721LimitOrderEvents;

@@ -14,6 +14,7 @@
 
 - [Forked searcher-minter repo](https://github.com/flashbots/searcher-minter) built by the amazing team at [Flashbots](https://flashbots.org).
 - [Artbotter](https://artbotter.io) for inspiring [Yobot](https://yobot.co) and providing generous amounts of their time and resources.
+- [Pawel Urbanek](https://pawelurbanek.com/ethereum-mempool-monitoring)
 
 ## Video Live Coding Demo
 

@@ -1,10 +1,14 @@
 import { providers, Wallet } from "ethers";
 import * as ethers from "ethers"
+const Blocknative = require('bnc-sdk')
+import Web3 from 'web3';
+const WebSocket = require('ws');
 
 import {
   DeployedContracts,
-  getAllERC721LimitOrderEvents,
-  sendFlashbotsBundle
+  fetchAllERC721LimitOrderEvents,
+  sendFlashbotsBundle,
+  fetchSortedOrdersForAllTokens
 } from "./utils";
 
 require('dotenv').config();
@@ -73,17 +77,75 @@ const filterStartBlock = 0;
 // ** Create a new ethers provider **
 // const provider = new ethers.providers.JsonRpcProvider('http://127.0.0.1:8545');
 
+// ** We need the BLOCKNATIVE_API_KEY **
+if (process.env.BLOCKNATIVE_API_KEY === undefined) {
+  console.error("Please provide BLOCKNATIVE_API_KEY env")
+  process.exit(1)
+}
 
 // ** Main Function **
 async function main() {
-  let all_events = await getAllERC721LimitOrderEvents(
-    YobotERC721LimitOrderContract,
-    filterStartBlock,
-    provider,
-    YobotERC721LimitOrderInterface
-  );
 
-  console.log(all_events);
+  const handleTransaction = (event) => {
+    const {
+      transaction, // ** transaction object **
+      emitterResult // ** data that is returned from the transaction event listener defined on the emitter **
+    } = event;
+
+    console.log(`Transaction ${transaction.hash}:`);
+    console.log(transaction)
+  }
+
+  // ** Blocknative SDK **
+  // ** https://docs.blocknative.com/notify-sdk **
+  const options = {
+    dappId: process.env.BLOCKNATIVE_API_KEY,
+    networkId: CHAIN_ID,
+    // system: 'ethereum', // defaults to ethereum
+    ws: WebSocket,
+    name: 'Yobot Searcher', // optional use for managing multiple instances
+    transactionHandlers: [handleTransaction],
+    onerror: (error) => {console.log("BlockNative SDK ERROR:", error)} // optional, use to catch errors
+  }
+
+  console.log("Instantiating Blocknative SDK...");
+  const sdk = new Blocknative(options);
+  await sdk.configuration({
+    scope: YobotERC721LimitOrderContractAddress, // [required] - either 'global' or valid Ethereum address
+    // abi: {}, // [optional] - valid contract ABI
+    // filters: [
+    //   { from:  process.env.CONTRACT_ADMIN_ADDRESS },
+    //   { "contractCall.methodName": "flipSaleState" },
+    //   { status: "pending" }
+    // ],
+    watchAddress: true // [optional] - Whether the server should automatically watch the "scope" value if it is an address
+  })
+
+
+  // let all_events = await fetchAllERC721LimitOrderEvents(
+  //   YobotERC721LimitOrderContract,
+  //   filterStartBlock,
+  //   provider,
+  //   YobotERC721LimitOrderInterface
+  // );
+
+  // console.log("-------");
+  // console.log("All Events....")
+  // console.log(all_events);
+  // console.log("-------");
+
+  // let sorted_events = fetchSortedOrdersForAllTokens(
+  //   YobotERC721LimitOrderContract,
+  //   filterStartBlock,
+  //   provider,
+  //   YobotERC721LimitOrderInterface
+  // );
+
+  // console.log("-------");
+  // console.log("Sorted Events....")
+  // console.log(sorted_events);
+  // console.log("-------");
+
   // await sendFlashbotsBundle(
   //   provider,
   //   FLASHBOTS_ENDPOINT,
