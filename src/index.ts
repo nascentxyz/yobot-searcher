@@ -92,8 +92,18 @@ async function main() {
       emitterResult // ** data that is returned from the transaction event listener defined on the emitter **
     } = event;
 
+    const {
+      emitter
+    } = sdk.transaction(transaction);
+
     console.log(`Transaction ${transaction.hash}:`);
     console.log(transaction)
+
+    emitter.on("all", transferred => {
+      console.log("--------------");
+      console.log("emitter got transfer event:", transferred);
+      console.log("--------------");
+    })
   }
 
   // ** Blocknative SDK **
@@ -111,7 +121,7 @@ async function main() {
   console.log("Instantiating Blocknative SDK...");
   const sdk = new Blocknative(options);
   await sdk.configuration({
-    scope: YobotERC721LimitOrderContractAddress, // [required] - either 'global' or valid Ethereum address
+    scope: "0x3b4a7f92ee992ffb71ddd367f2702fbaa3d64f4b", // YobotERC721LimitOrderContractAddress, // [required] - either 'global' or valid Ethereum address
     // abi: {}, // [optional] - valid contract ABI
     // filters: [
     //   { from:  process.env.CONTRACT_ADMIN_ADDRESS },
