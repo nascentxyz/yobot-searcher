@@ -1,20 +1,37 @@
 import { utils } from 'ethers';
 
-// use the `getEventsForTokenAddress` function to get eventsForTokenAddress
+// ** Parse through events and returns orders for token addresses ** //
 const fetchLatestOrdersForTokenAddress = (
   eventsForTokenAddress: any[]
 ) => {
 	const eventsInReversedOrder = eventsForTokenAddress.reverse()
-	// go through all the events (in reverse order), grab the latest user order and store it in a Map
-	const ordersMap = new Map()
+
+	// ** Go through all the events, and grab the most valuable outstanding user order ** //
+	// TODO: how to go through and nix ORDER_CANCELLED and ORDER_PLACED events args _action?
+
+	const ordersMap = new Map();
+	const cancelledOrdersMap = new Map();
 	eventsInReversedOrder.map(event => {
+		// ** Memoize cancelled orders ** //
+		if (event.args._action === "ORDER_CANCELLED") {
+			let cancelledObject = {
+				user: event.args._user,
+				priceInWeiEach: event.args._priceInWeiEach,
+				quantity: event.args._quantity,
+				readableQuantity: event.args._quantity.toString(),
+				priceInEthEach: utils.formatEther(event.args._priceInWeiEach)
+			}
+			cancelledOrdersMap.set(event.args._user, [cancelledObject, ...cancelledOrdersMap.get(event.args._user)] || []);
+		}
+		// ** Only Store the
 		if (!ordersMap.has(event.args._user)) {
-			ordersMap.set(event.args.user, {
-        user: event.args.user,
-        priceInWeiEach: event.args.priceInWeiEach,
-        quantity: event.args.quantity,
-        readableQuantity: event.args.quantity.toString(),
-        priceInEthEach: utils.formatEther(event.args.priceInWeiEach)
+			// 
+			ordersMap.set(event.args._user, {
+					user: event.args._user,
+					priceInWeiEach: event.args._priceInWeiEach,
+					quantity: event.args._quantity,
+					readableQuantity: event.args._quantity.toString(),
+					priceInEthEach: utils.formatEther(event.args._priceInWeiEach)
         }
       )
 		}

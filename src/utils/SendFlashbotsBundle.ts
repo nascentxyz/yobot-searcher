@@ -3,25 +3,15 @@ import { Web3Provider } from "@ethersproject/providers";
 import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
 
 const sendFlashbotsBundle = async (
-  // provider: Web3Provider,
+  provider: ethers.providers.Provider,
+  flashbotsProvider: FlashbotsBundleProvider,
+  authSigner: ethers.Wallet,
   FLASHBOTS_ENDPOINT: string,
   CHAIN_ID: number,
   ETHER: bigint,
   GWEI: bigint,
+  ATTACHED_ADDRESS: string,
 ) => {
-  // ** Create the Flashbots Bundle Provider **
-  // TODO: this can be instantiated once when the bot starts
-  const provider = ethers.getDefaultProvider("goerli");
-  const authSigner = new ethers.Wallet(
-    '0x2000000000000000000000000000000000000000000000000000000000000000', // private key
-    provider // ethers provider
-  );
-  const flashbotsProvider = await FlashbotsBundleProvider.create(
-    provider,
-    authSigner,
-    FLASHBOTS_ENDPOINT,
-    "goerli"
-  );
 
   // ** Create our signed transactions bundle **
   const signedTransactions = await flashbotsProvider.signBundle([
@@ -34,7 +24,7 @@ const sendFlashbotsBundle = async (
         data: "0x1249c58b",
         maxFeePerGas: GWEI * 3n,
         maxPriorityFeePerGas: GWEI * 2n,
-        to: "0x20EE855E43A7af19E407E39E5110c2C1Ee41F64D"
+        to: ATTACHED_ADDRESS
       },
     },
   ]);
@@ -50,7 +40,7 @@ const sendFlashbotsBundle = async (
   );
   console.log(new Date());
 
-  // Using TypeScript discrimination
+  // ** Using TypeScript discrimination **
   if ("error" in simulation) {
     console.log(`Simulation Error: ${simulation.error.message}`);
   } else {

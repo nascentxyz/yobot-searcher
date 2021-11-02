@@ -1,5 +1,7 @@
 import { providers, Wallet } from "ethers";
-import * as ethers from "ethers"
+import { ethers } from "ethers";
+import { Web3Provider } from "@ethersproject/providers";
+import { FlashbotsBundleProvider } from "@flashbots/ethers-provider-bundle";
 const Blocknative = require('bnc-sdk')
 import Web3 from 'web3';
 const WebSocket = require('ws');
@@ -83,8 +85,50 @@ if (process.env.BLOCKNATIVE_API_KEY === undefined) {
   process.exit(1)
 }
 
+const AttachedAddress = "0x3b4a7f92ee992ffb71ddd367f2702fbaa3d64f4b";
+
+
 // ** Main Function **
 async function main() {
+
+  // ** Create the Flashbots Bundle Provider **
+  // TODO: this can be instantiated once when the bot starts
+  const defaultEthersProvider = ethers.getDefaultProvider("goerli");
+  const authSigner = new ethers.Wallet(
+    process.env.WALLET_PRIVATE_KEY, // private key
+    provider // ethers provider
+  );
+  const flashbotsProvider = await FlashbotsBundleProvider.create(
+    provider,
+    authSigner,
+    FLASHBOTS_ENDPOINT,
+    "goerli"
+  );
+
+  let all_events = await fetchAllERC721LimitOrderEvents(
+    YobotERC721LimitOrderContract,
+    filterStartBlock,
+    provider,
+    YobotERC721LimitOrderInterface
+  );
+
+  console.log("-------");
+  console.log("All Events....")
+  console.log(all_events);
+  console.log("-------");
+
+  let sorted_events = await fetchSortedOrdersForAllTokens(
+    YobotERC721LimitOrderContract,
+    filterStartBlock,
+    provider,
+    YobotERC721LimitOrderInterface
+  );
+
+  console.log("-------");
+  console.log("Sorted Events....")
+  console.log(sorted_events);
+  console.log("-------");
+
 
   const handleTransaction = (event) => {
     const {
@@ -92,18 +136,37 @@ async function main() {
       emitterResult // ** data that is returned from the transaction event listener defined on the emitter **
     } = event;
 
-    const {
-      emitter
-    } = sdk.transaction(transaction);
+    // const {
+    //   emitter
+    // } = sdk.transaction(transaction);
 
-    console.log(`Transaction ${transaction.hash}:`);
-    console.log(transaction)
+    console.log(transaction);
+    console.log(`Transaction status: ${transaction.status}`);
 
-    emitter.on("all", transferred => {
-      console.log("--------------");
-      console.log("emitter got transfer event:", transferred);
-      console.log("--------------");
-    })
+    if(transaction.status === 'confirmed') {
+      console.log(`Transaction ${transaction} confirmed`);
+      console.log("Sending flashbots bundle...");
+
+      // TODO: rip out
+      // ** Submit a mint transaction **
+      sendFlashbotsBundle(
+        defaultEthersProvider,
+        flashbotsProvider,
+        authSigner,
+        FLASHBOTS_ENDPOINT,
+        CHAIN_ID,
+        ETHER,
+        GWEI,
+        AttachedAddress
+      );
+    }
+
+    // emitter.on("all", transferred => {
+    //   console.log("--------------");
+    //   console.log("emitter got transfer event:", transferred);
+    //   console.log("--------------");
+
+    // })
   }
 
   // ** Blocknative SDK **
@@ -121,7 +184,7 @@ async function main() {
   console.log("Instantiating Blocknative SDK...");
   const sdk = new Blocknative(options);
   await sdk.configuration({
-    scope: "0x3b4a7f92ee992ffb71ddd367f2702fbaa3d64f4b", // YobotERC721LimitOrderContractAddress, // [required] - either 'global' or valid Ethereum address
+    scope: AttachedAddress, // YobotERC721LimitOrderContractAddress, // [required] - either 'global' or valid Ethereum address
     // abi: {}, // [optional] - valid contract ABI
     // filters: [
     //   { from:  process.env.CONTRACT_ADMIN_ADDRESS },
@@ -130,40 +193,6 @@ async function main() {
     // ],
     watchAddress: true // [optional] - Whether the server should automatically watch the "scope" value if it is an address
   })
-
-
-  // let all_events = await fetchAllERC721LimitOrderEvents(
-  //   YobotERC721LimitOrderContract,
-  //   filterStartBlock,
-  //   provider,
-  //   YobotERC721LimitOrderInterface
-  // );
-
-  // console.log("-------");
-  // console.log("All Events....")
-  // console.log(all_events);
-  // console.log("-------");
-
-  // let sorted_events = fetchSortedOrdersForAllTokens(
-  //   YobotERC721LimitOrderContract,
-  //   filterStartBlock,
-  //   provider,
-  //   YobotERC721LimitOrderInterface
-  // );
-
-  // console.log("-------");
-  // console.log("Sorted Events....")
-  // console.log(sorted_events);
-  // console.log("-------");
-
-  // await sendFlashbotsBundle(
-  //   provider,
-  //   FLASHBOTS_ENDPOINT,
-  //   CHAIN_ID,
-  //   ETHER,
-  //   GWEI,
-  //   wallet,
-  // );
 }
 
 main();
