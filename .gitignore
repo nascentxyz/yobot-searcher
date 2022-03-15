@@ -1,6 +1,9 @@
+# Ignore wallets
+wallets/*
 
 # Ignore environment variables
 .env
+.env.prod
 
 lib-cov
 *.seed

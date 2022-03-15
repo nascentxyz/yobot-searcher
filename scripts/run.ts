@@ -83,6 +83,7 @@ const enterCommand = (url: string, rl: any) => {
     LEGACY_GAS_PRICE: legacyGasPrice,
     PRIORITY_FEE: priorityFee,
     YobotERC721LimitOrderContract,
+    YobotERC721LimitOrderInterface,
     YobotInfiniteMintInterface: yobotInfiniteMintInterface,
     MINTING_CONTRACT: infiniteMint,
     DISCORD_WEBHOOK_URL: discordWebhookUrl,
@@ -109,8 +110,8 @@ const enterCommand = (url: string, rl: any) => {
   let previousRoundBalance: number = 0; // The previous round balance to track inventory
   let inventoryQty: number = 0; // The inventory quantity
   let walletTokens: any[] = []; // The tokens in the wallet
-  let isTotalSupplyDerived: boolean = false;
-  let derivedTotalSupply: number = 0;
+  // let isTotalSupplyDerived: boolean = false;
+  // const derivedTotalSupply: number = 0;
   console.log('State configured...');
 
   // ** ///////////////////////////////////////// ** //
@@ -286,11 +287,8 @@ const enterCommand = (url: string, rl: any) => {
         saveJson(PREVIOUS_ROUND_BALANCE, prevBalanceJSON);
       }
 
-      // ** Inventory is the searcher's balance plus minted orders ** //
-      const inventory = balanceInt + mintedOrders.length;
-      // TODO: replace mintedOrders.length with mintedOrdersQty
-      inventoryQty = balanceInt + mintedOrders.length;
-      console.log('Searcher inventory:', inventory);
+      // ** Inventory is the searcher's balance ** //
+      inventoryQty = balanceInt;
 
       // ** Update the previous balance ** //
       previousRoundBalance = balance;
@@ -301,13 +299,21 @@ const enterCommand = (url: string, rl: any) => {
 
       // ** Check enough left to mint from the total supply minus how many we minted** //
       const remainingSupplyNum = remainingSupply.toNumber();
-      const remainingOrders = filteredOrders.slice(inventory).slice(0, remainingSupply.toNumber());
+      const remainingOrders = filteredOrders.slice(inventoryQty).slice(0, remainingSupply.toNumber());
       const numberLeftToMint = filteredOrders.map((o) => parseInt(o.quantity, 10));
       console.log('Reduced orders:', numberLeftToMint);
 
       const reducedNumToMint = numberLeftToMint.reduce((a, b) => a + b, 0) - inventoryQty;
 
       console.log('Number left to mint:', reducedNumToMint);
+
+      // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! //
+      if (reducedNumToMint <= 0) {
+        console.log('No more orders to mint, releasing the mint lock...');
+        mintingLocked = false;
+        return;
+      }
+      // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! //
 
       // ** ///////////////////////////////////////// ** //
       // **                                           ** //
@@ -316,75 +322,75 @@ const enterCommand = (url: string, rl: any) => {
       // ** ///////////////////////////////////////// ** //
 
       // ** Use derived total supply if we are failing to mint ** //
-      let mintingTotalSupply = totalSupply.toNumber();
-      if (mintingTotalSupply === 0 && (
-        successfulTotalSupplyAbi === undefined
-        || successfulTotalSupplyAbi === ''
-      )) {
-        mintingTotalSupply = derivedTotalSupply;
-        isTotalSupplyDerived = true;
-      }
-
-      // ** Get previous block's gas limit ** //
-      const currentBlockNumber = await provider.getBlockNumber();
-      const block = await provider.getBlock(currentBlockNumber);
-      const blockGasLimit = block.gasLimit;
+      // let mintingTotalSupply = totalSupply.toNumber();
+      // if (mintingTotalSupply === 0 && (
+      //   successfulTotalSupplyAbi === undefined
+      //   || successfulTotalSupplyAbi === ''
+      // )) {
+      //   mintingTotalSupply = derivedTotalSupply;
+      //   isTotalSupplyDerived = true;
+      // }
 
       // ** Map Orders to transactions ** //
       const transactions: any[] = [];
-      let cumulativeGasCost = BigNumber.from(0);
-      // for (let i = 0; i < reducedNumToMint; i += 1) {
-      for (let i = 0; i < 1; i += 1) {
-        // ** Craft the transaction data ** //
-        // TODO: refactor this into a function
-        // const data: any = yobotInfiniteMintInterface.encodeFunctionData(
-        //   'mint',
-        //   [
-        //     EOA_ADDRESS, // address to
-        //     // mintingTotalSupply + i,
-        //     // ethers.utils.randomBytes(32), // uint256 tokenId
-        //   ],
-        // );
-        console.log('Minting abi:', MINTING_ABI);
-        const data: string = new Interface([MINTING_ABI]).encodeFunctionData('mint', [EOA_ADDRESS]);
 
-        console.log('Crafting transaction with token id:', totalSupply.toNumber() + i);
+      // ** Craft the transaction data ** //
+      console.log('Crafting transactions for order:', fillableOrders[0]);
+      const mintingData: string = new Interface([MINTING_ABI]).encodeFunctionData('mint', [EOA_ADDRESS]);
+      const fillingOrderData: string = YobotERC721LimitOrderInterface.encodeFunctionData('fillOrder', [
+        fillableOrders[0].orderId, // orderId
+        totalSupply.toNumber(), // tokenId
+        fillableOrders[0].priceInWeiEach, // expectedPriceInWeiEach
+        EOA_ADDRESS, // profitTo
+        true, // sendNow
+      ]);
 
-        // ** Estimating tx gas ** //
-        let gasEstimate = BigNumber.from(100_000);
-        try {
-          const tempEstimate = await provider.estimateGas({ to: infiniteMint, from: EOA_ADDRESS, data });
-          gasEstimate = tempEstimate;
-        } catch (e) {
-          // !! IGNORE !! //
-        }
-
-        if (cumulativeGasCost.add(gasEstimate).gt(blockGasLimit)) {
-          console.log('Gas limit reached, sending a bundle with tx count:', transactions.length);
-          break;
-        } else {
-          cumulativeGasCost = cumulativeGasCost.add(gasEstimate);
-        }
-
-        // ** Craft mintable transactions ** //
-        const tx = await craftTransaction(
-          provider,
-          wallet,
-          chainId,
-          blocksUntilInclusion,
-          legacyGasPrice,
-          priorityFee,
-          gasEstimate, // BigNumber.from(0), // set gas limit to 0 to use the previous block's gas limit
-          infiniteMint,
-          data,
-          BigNumber.from(mintPrice), // value in wei (mint price)
-        );
-        transactions.push(tx);
-        console.log('Got Crafted Transaction:', tx);
+      // ** Craft transactions ** //
+      let gasEstimate;
+      try {
+        gasEstimate = await provider.estimateGas({
+          to: infiniteMint,
+          from: EOA_ADDRESS,
+          data: mintingData,
+        });
+      } catch (e) {
+        // TODO: Change this to a precalculated split between remaining gas for the fill to be profitable
+        gasEstimate = BigNumber.from(0);
       }
-
-      // ** Update our total supply if derived ** //
-      if (isTotalSupplyDerived) derivedTotalSupply += transactions.length;
+      const mintTx = await craftTransaction(
+        provider,
+        wallet,
+        chainId,
+        blocksUntilInclusion,
+        legacyGasPrice,
+        priorityFee,
+        gasEstimate,
+        infiniteMint,
+        mintingData,
+        BigNumber.from(mintPrice), // value in wei (mint price)
+      );
+      transactions.push(mintTx);
+      console.log('Crafted Transaction:', mintTx);
+      let fillGasEstimate;
+      try {
+        fillGasEstimate = await provider.estimateGas({ to: YobotERC721LimitOrderContract.address, from: EOA_ADDRESS, data: fillingOrderData });
+      } catch (e) {
+        fillGasEstimate = BigNumber.from(0);
+      }
+      const fillTx = await craftTransaction(
+        provider,
+        wallet,
+        chainId,
+        blocksUntilInclusion,
+        legacyGasPrice,
+        priorityFee,
+        fillGasEstimate,
+        YobotERC721LimitOrderContract.address,
+        fillingOrderData,
+        BigNumber.from(0),
+      );
+      transactions.push(fillTx);
+      console.log('Crafted Transaction:', fillTx);
 
       console.log('Transactions:', transactions.length);
 
@@ -393,9 +399,9 @@ const enterCommand = (url: string, rl: any) => {
         // TODO: alert a public discord channel if orders don't have enough wei
 
         // ** We still want to try to fill orders if we have an inventory ** //
-        if (inventory > 0) {
-          fillOrders(fillableOrders, currentGasPrice);
-        }
+        // if (inventory > 0) {
+        //   fillOrders(fillableOrders, currentGasPrice);
+        // }
 
         // ** Release the Minting Lock ** //
         mintingLocked = false;
