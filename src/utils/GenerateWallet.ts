@@ -11,6 +11,8 @@ const generateWallet = (path: string) => {
   // console.log('address:', wallet.address)
   // console.log('mnemonic:', wallet.mnemonic.phrase)
   // console.log('privateKey:', wallet.privateKey)
+
+  return wallet;
 };
 
 export default generateWallet;

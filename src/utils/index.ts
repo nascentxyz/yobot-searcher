@@ -4,6 +4,7 @@ export { default as getDeployedContract } from './DeployedContracts';
 export { default as generateRandomUint256 } from './RandomUint256';
 export { default as saveJson } from './SaveJson';
 export { default as readJson } from './ReadJson';
+export { default as generateWallet } from './GenerateWallet';
 
 // CONTRACT INTERACTION
 export * from './CallBalance';

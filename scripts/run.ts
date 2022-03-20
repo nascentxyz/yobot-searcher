@@ -24,6 +24,7 @@ import {
   extractMaxSupplies,
   extractMintPrice,
   extractTotalSupplies,
+  generateWallet,
   postDiscord,
   readJson,
   saveJson,
@@ -36,6 +37,7 @@ require('dotenv').config();
 // ** INVENTORY FILES ** //
 const MINTED_ORDERS_FILE = './inventory/minted.json';
 const PREVIOUS_ROUND_BALANCE = './inventory/previousRoundBalance.json';
+const WALLET_STORE = './wallets/wallet.json';
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! //
 // !!                                 !! //
@@ -112,7 +114,27 @@ const enterCommand = (url: string, rl: any) => {
   let walletTokens: any[] = []; // The tokens in the wallet
   // let isTotalSupplyDerived: boolean = false;
   // const derivedTotalSupply: number = 0;
+  let ephemeralWallet = EOA_ADDRESS;
   console.log('State configured...');
+
+  // ** Read Previous Wallets ** //
+  const walletsJson = readJson(WALLET_STORE);
+  if (walletsJson && walletsJson.wallets && walletsJson.wallets.length > 0) {
+    ephemeralWallet = walletsJson.wallets[walletsJson.wallets.length - 1].address;
+  }
+
+  // ** Creates a new wallet ** //
+  const generateNewWallet = async () => {
+    console.log('Generating new wallet...');
+    const newWallet = await generateWallet(WALLET_STORE);
+    ephemeralWallet = newWallet.address;
+    console.log('New wallet private key:');
+    console.log(newWallet.privateKey);
+    await postDiscord(
+      discordWebhookUrl,
+      `⏳ Generated New EOA Wallet: ${newWallet.address}`,
+    );
+  };
 
   // ** ///////////////////////////////////////// ** //
   // **              Define Workers               ** //
@@ -268,7 +290,7 @@ const enterCommand = (url: string, rl: any) => {
       // ** Fetch the Balance of the searcher ** //
       const balance = await callBalance(
         infiniteMint,
-        EOA_ADDRESS,
+        ephemeralWallet,
         provider,
       );
       let balanceInt: number = 0;
@@ -336,12 +358,12 @@ const enterCommand = (url: string, rl: any) => {
 
       // ** Craft the transaction data ** //
       console.log('Crafting transactions for order:', fillableOrders[0]);
-      const mintingData: string = new Interface([MINTING_ABI]).encodeFunctionData('mint', [EOA_ADDRESS]);
+      const mintingData: string = new Interface([MINTING_ABI]).encodeFunctionData('mint', [ephemeralWallet]);
       const fillingOrderData: string = YobotERC721LimitOrderInterface.encodeFunctionData('fillOrder', [
         fillableOrders[0].orderId, // orderId
         totalSupply.toNumber(), // tokenId
         fillableOrders[0].priceInWeiEach, // expectedPriceInWeiEach
-        EOA_ADDRESS, // profitTo
+        ephemeralWallet, // profitTo
         true, // sendNow
       ]);
 
@@ -350,7 +372,7 @@ const enterCommand = (url: string, rl: any) => {
       try {
         gasEstimate = await provider.estimateGas({
           to: infiniteMint,
-          from: EOA_ADDRESS,
+          from: ephemeralWallet,
           data: mintingData,
         });
       } catch (e) {
@@ -373,7 +395,7 @@ const enterCommand = (url: string, rl: any) => {
       console.log('Crafted Transaction:', mintTx);
       let fillGasEstimate;
       try {
-        fillGasEstimate = await provider.estimateGas({ to: YobotERC721LimitOrderContract.address, from: EOA_ADDRESS, data: fillingOrderData });
+        fillGasEstimate = await provider.estimateGas({ to: YobotERC721LimitOrderContract.address, from: ephemeralWallet, data: fillingOrderData });
       } catch (e) {
         fillGasEstimate = BigNumber.from(0);
       }
@@ -445,6 +467,7 @@ const enterCommand = (url: string, rl: any) => {
           discordWebhookUrl,
           `❌ MINTING SIMULATION ERRORED ❌ Response=${JSON.stringify(e.body)}`,
         );
+        await generateNewWallet();
         mintingLocked = false;
         return;
       }
